@@ -48,7 +48,8 @@
       // YOUR CODE HERE
       // ...
          $pc[31:0] = (>>1$reset) ? '0 : 
-                     (>>3$taken_br) ? >>3$br_tgt_pc : >>1$inc_pc; 
+                     (>>3$taken_br) ? >>3$br_tgt_pc :
+                     (>>3$is_load) ? >>3$inc_pc : >>1$inc_pc;
                      
                   
          $imem_rd_en = !$reset;
@@ -179,15 +180,16 @@
                          $lui ? ({$imm[31:12], 12'b0}) :
                          $auipc ? $pc + $imm :
                          $jal ? $pc + 4 :
-                         $jalr ? $pc + 4 : 32'bx;
-         
+                         $jalr ? $pc + 4 : 
+                         ($is_load || $is_s_instr) ? $src1_value + $imm : 32'bx;
          
                          
          // Register File Write
-         $rf_wr_en = $valid ? (($rd == 5'b0) ? 1'b0 : $rd_valid) : 1'b0; 
-         ?$rf_wr_en   
-            $rf_wr_index[4:0] = $rd[4:0];
-         $rf_wr_data[31:0] = $result[31:0];
+         $rf_wr_en = ($rd_valid && $valid && $rd != 5'b0) || >>2$valid_load;
+         ?$rf_wr_en
+            $rf_wr_index[4:0] = !$valid ? >>2$rd[4:0] : $rd[4:0];
+      
+         $rf_wr_data[31:0] = !$valid ? >>2$ld_data[31:0] : $result[31:0];
          
          //branching
          
@@ -199,7 +201,20 @@
                      $is_bgeu ? ($src1_value >= $src2_value) : 1'b0;
                      
          $valid_taken_br = $valid && $taken_br;
-         $valid = !(>>1$valid_taken_br || >>2$valid_taken_br);
+         // load
+         
+         $valid_load = $valid && $is_load;
+         $valid = !(>>1$valid_taken_br || >>2$valid_taken_br || >>1$valid_load || >>2$valid_load);
+         
+         
+      @4
+         $dmem_rd_en = $valid_load;
+         $dmem_wr_en = $valid && $is_s_instr;
+         $dmem_addr[3:0] = $result[5:2];
+         $dmem_wr_data[31:0] = $src2_value[31:0];
+         
+      @5   
+         $ld_data[31:0] = $dmem_rd_data[31:0];
          
       // Note: Because of the magic we are using for visualisation, if visualisation is enabled below,
       //       be sure to avoid having unassigned signals (which you might be using for random inputs)
@@ -219,7 +234,7 @@
    |cpu
       m4+imem(@1)    // Args: (read stage)
       m4+rf(@2, @3)  // Args: (read stage, write stage) - if equal, no register bypass is required
-      //m4+dmem(@4)    // Args: (read/write stage)
+      m4+dmem(@4)    // Args: (read/write stage)
    
    m4+cpu_viz(@4)    // For visualisation, argument should be at least equal to the last stage of CPU logic. @4 would work for all labs.
 \SV
