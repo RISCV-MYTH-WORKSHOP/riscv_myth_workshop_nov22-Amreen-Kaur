@@ -12,12 +12,15 @@
       @0
          $reset = *reset;
          
-         //SEQUENTIAL CALCULATOR
+         //CYCLED CALCULATOR
          // YOUR CODE HERE
          // ...
-         $in1[31:0] = >>1$out[31:0];
+         $in1[31:0] = >>2$out[31:0];
          $in2[31:0] = $rand2[3:0];
-         $out[31:0] = $reset ? 0 : ($op[1] ? ($op[0] ? $in1[31:0] / $in2[31:0] : $in1[31:0] * $in2[31:0]) : ($op[0] ? $in1[31:0] - $in2[31:0] : $in1[31:0] + $in2[31:0])) ; 
+         $op[1:0] = $rand3[1:0];
+         $num = $reset ? 0 : >>1$num + 1 ;
+      @1   
+         $out[31:0] = ($reset | !($num)) ? 32'b0 : ($op[1] ? ($op[0] ? $in1[31:0] / $in2[31:0] : $in1[31:0] * $in2[31:0]) : ($op[0] ? $in1[31:0] - $in2[31:0] : $in1[31:0] + $in2[31:0])) ; 
 
 
       // Macro instantiations for calculator visualization(disabled by default).
