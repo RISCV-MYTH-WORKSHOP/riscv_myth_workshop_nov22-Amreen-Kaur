@@ -108,6 +108,9 @@
          
          $src1_value[31:0] = $rf_rd_data1[31:0];
          $src2_value[31:0] = $rf_rd_data2[31:0];
+          // alu
+         $result[31:0] = $is_addi ? $src1_value + $imm :
+                         $is_add ? $src1_value + $src2_value : 32'bx;
          
          // Register File Write
          $rf_wr_en = ($rd == 5'b0) ? 1'b0 : $rd_valid;
