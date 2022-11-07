@@ -32,7 +32,8 @@
    m4_asm(ADDI, r13, r13, 1)            // Increment intermediate register by 1
    m4_asm(BLT, r13, r12, 1111111111000) // If a3 is less than a2, branch to label named <loop>
    m4_asm(ADD, r10, r14, r0)            // Store final result to register a0 so that it can be read by main program
-   
+   m4_asm(SW, r0, r10, 10000)           // Store the value of r10 into address 17.
+   m4_asm(LW, r17, r0, 10000) 
    // Optional:
    // m4_asm(JAL, r7, 00000000000000000000) // Done. Jump to itself (infinite loop). (Up to 20-bit signed immediate plus implicit 0 bit (unlike JALR) provides byte address; last immediate bit should also be 0)
    m4_define_hier(['M4_IMEM'], M4_NUM_INSTRS)
@@ -44,13 +45,14 @@
          
          
         
-       //pipelined code 
+       //pipelined + load store + jump = final code 
       // YOUR CODE HERE
       // ...
          $pc[31:0] = (>>1$reset) ? '0 : 
                      (>>3$taken_br) ? >>3$br_tgt_pc :
-                     (>>3$is_load) ? >>3$inc_pc : >>1$inc_pc;
-                     
+                     (>>3$is_load) ? >>3$inc_pc :
+                     (>>3$valid_jump && >>3$is_jal) ? >>3$br_tgt_pc :
+                     (>>3$valid_jump && >>3$is_jalr) ? >>3$jalr_tgt_pc : >>1$inc_pc;
                   
          $imem_rd_en = !$reset;
          $imem_rd_addr[31:0] = $pc[M4_IMEM_INDEX_CNT+1:2];
@@ -129,7 +131,8 @@
          $auipc = $dec_bits ==? 11'bx_xxx_0010111;
          $jal = $dec_bits ==? 11'bx_xxx_1101111;
          $jalr = $dec_bits ==? 11'bx_000_1100111;
-
+         $is_jump = $is_jal || $is_jalr;
+         
          `BOGUS_USE($is_beq $is_bne $is_blt $is_bge $is_bltu $is_bgeu)
           
       @2    // register file read
@@ -143,12 +146,12 @@
          ?$rf_rd_en2
             $rf_rd_index2[4:0] = $rs2[4:0];
          
-         $src1_value[31:0] = $rf_rd_data1[31:0];
-         $src2_value[31:0] = $rf_rd_data2[31:0];
          
          //branch target pc
          $br_tgt_pc[31:0] = $pc + $imm; 
          
+         //jump target pc
+         $jalr_tgt_pc[31:0] = $src1_value + $imm;
          
          // Input signals to ALU
          $src1_value[31:0] = ((>>1$rd == $rs1) && >>1$rf_wr_en) ? >>1$result : $rf_rd_data1[31:0];
@@ -179,8 +182,8 @@
                          $is_sra ? ({{32{$src1_value[31]}}, $src1_value} >> $src2_value[4:0]) :
                          $lui ? ({$imm[31:12], 12'b0}) :
                          $auipc ? $pc + $imm :
-                         $jal ? $pc + 4 :
-                         $jalr ? $pc + 4 : 
+                         $jal ? $pc + $imm :
+                         $jalr ? $pc + $imm : 
                          ($is_load || $is_s_instr) ? $src1_value + $imm : 32'bx;
          
                          
@@ -204,9 +207,10 @@
          // load
          
          $valid_load = $valid && $is_load;
-         $valid = !(>>1$valid_taken_br || >>2$valid_taken_br || >>1$valid_load || >>2$valid_load);
+         $valid = !(>>1$valid_taken_br || >>2$valid_taken_br || >>1$valid_load || >>2$valid_load || >>1$valid_jump || >>2$valid_jump);
          
-         
+         // Jump
+         $valid_jump = $valid && $is_jump;
       @4
          $dmem_rd_en = $valid_load;
          $dmem_wr_en = $valid && $is_s_instr;
@@ -223,7 +227,7 @@
    
    // Assert these to end simulation (before Makerchip cycle limit).
    //*passed = *cyc_cnt > 100;
-   *passed = |cpu/xreg[10]>>5$value == (1+2+3+4+5+6+7+8+9);
+   *passed = |cpu/xreg[17]>>5$value == (1+2+3+4+5+6+7+8+9);
    *failed = 1'b0;
    
    // Macro instantiations for:
